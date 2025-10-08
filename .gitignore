@@ -12,6 +12,9 @@ reels_download
 build/
 develop-eggs/
 dist/
+build/
+__pycache__/
+dist/
 downloads/
 eggs/
 .eggs/

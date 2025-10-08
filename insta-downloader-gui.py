@@ -10,76 +10,104 @@ class InstaDownloaderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Instagram Reel Downloader")
-        self.root.geometry("600x500")
-        self.root.configure(bg='#f0f0f0')
-        
+        # Improved size and background for a modern look
+        self.root.geometry("720x560")
+        self.root.configure(bg='#f5f7fa')
+
         # Variables
         self.download_path = tk.StringVar(value="reels_download")
         self.is_downloading = False
-        
+        self._placeholder = "Enter one or more Reel URLs here, one per line..."
+        self._progress_total = 0
+        self._progress_current = 0
+
         self.setup_ui()
     
     def setup_ui(self):
+        # Themed styling
+        style = ttk.Style()
+        try:
+            style.theme_use('clam')
+        except Exception:
+            pass
+        style.configure('Header.TLabel', font=('Helvetica', 18, 'bold'), foreground='#13315c')
+        style.configure('Sub.TLabel', font=('Helvetica', 10), foreground='#394049')
+        style.configure('Accent.TButton', background='#2b8cff', foreground='white')
+        style.map('Accent.TButton', background=[('active', '#1865d6')])
+
         # Main frame
-        main_frame = ttk.Frame(self.root, padding="20")
+        main_frame = ttk.Frame(self.root, padding=(18, 18, 18, 12))
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
+
         # Title
-        title_label = ttk.Label(main_frame, text="Instagram Reel Downloader", 
-                               font=('Arial', 16, 'bold'))
+        title_label = ttk.Label(main_frame, text="Instagram Reel Downloader", style='Header.TLabel')
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
-        
+
         # URL input section
-        url_label = ttk.Label(main_frame, text="Enter Reel URLs (one per line):")
+        url_label = ttk.Label(main_frame, text="Enter Reel URLs (one per line):", style='Sub.TLabel')
         url_label.grid(row=1, column=0, sticky=tk.W, pady=(0, 5))
-        
-        self.url_text = scrolledtext.ScrolledText(main_frame, height=8, width=70)
+
+        # URL input with placeholder behavior
+        self.url_text = scrolledtext.ScrolledText(main_frame, height=10, width=80, wrap=tk.WORD)
         self.url_text.grid(row=2, column=0, columnspan=2, pady=(0, 10), sticky=(tk.W, tk.E))
-        
+        self.url_text.insert(1.0, self._placeholder)
+        self.url_text.configure(foreground='#6b6f76')
+        self.url_text.bind('<FocusIn>', self._clear_placeholder)
+        self.url_text.bind('<FocusOut>', self._restore_placeholder)
+
         # Download path section
         path_frame = ttk.Frame(main_frame)
         path_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
-        
+
         ttk.Label(path_frame, text="Download folder:").grid(row=0, column=0, sticky=tk.W)
-        
-        path_entry = ttk.Entry(path_frame, textvariable=self.download_path, width=50)
+
+        path_entry = ttk.Entry(path_frame, textvariable=self.download_path, width=52)
         path_entry.grid(row=1, column=0, padx=(0, 10), sticky=(tk.W, tk.E))
-        
+
         browse_btn = ttk.Button(path_frame, text="Browse", command=self.browse_folder)
         browse_btn.grid(row=1, column=1)
-        
+
         path_frame.columnconfigure(0, weight=1)
-        
+
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=2, pady=(10, 0))
-        
-        self.download_btn = ttk.Button(button_frame, text="Download Reels", 
-                                     command=self.start_download, style='Accent.TButton')
+        button_frame.grid(row=4, column=0, columnspan=2, pady=(6, 6), sticky=tk.W)
+
+        self.download_btn = ttk.Button(button_frame, text="Download Reels", command=self.start_download, style='Accent.TButton')
         self.download_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
+
         clear_btn = ttk.Button(button_frame, text="Clear URLs", command=self.clear_urls)
         clear_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.stop_btn = ttk.Button(button_frame, text="Stop", command=self.stop_download, 
-                                  state='disabled')
+
+        self.stop_btn = ttk.Button(button_frame, text="Stop", command=self.stop_download, state='disabled')
         self.stop_btn.pack(side=tk.LEFT)
-        
-        # Progress bar
+
+        # Keyboard shortcuts
+        self.root.bind('<Control-d>', lambda e: self.start_download())
+        self.root.bind('<Control-o>', lambda e: self.browse_folder())
+        self.root.bind('<Control-l>', lambda e: self.clear_urls())
+
+        # Tooltips
+        self._add_tooltip(self.download_btn, 'Start downloading the entered reel URLs (Ctrl+D)')
+        self._add_tooltip(browse_btn, 'Choose a folder to save downloaded reels (Ctrl+O)')
+        self._add_tooltip(clear_btn, 'Clear the URL input box (Ctrl+L)')
+
+        # Progress
         self.progress_var = tk.StringVar(value="Ready")
-        progress_label = ttk.Label(main_frame, textvariable=self.progress_var)
-        progress_label.grid(row=5, column=0, columnspan=2, pady=(20, 5), sticky=tk.W)
-        
-        self.progress_bar = ttk.Progressbar(main_frame, mode='indeterminate')
-        self.progress_bar.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
-        
+        progress_label = ttk.Label(main_frame, textvariable=self.progress_var, style='Sub.TLabel')
+        progress_label.grid(row=5, column=0, columnspan=2, pady=(18, 6), sticky=tk.W)
+
+        self.progress_bar = ttk.Progressbar(main_frame, mode='determinate', length=560)
+        self.progress_bar.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 12))
+
         # Log output
-        log_label = ttk.Label(main_frame, text="Download Log:")
+        log_label = ttk.Label(main_frame, text="Download Log:", style='Sub.TLabel')
         log_label.grid(row=7, column=0, sticky=tk.W, pady=(10, 5))
-        
-        self.log_text = scrolledtext.ScrolledText(main_frame, height=10, width=70)
+
+        self.log_text = scrolledtext.ScrolledText(main_frame, height=10, width=80, wrap=tk.WORD)
         self.log_text.grid(row=8, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
+        self.log_text.configure(state='normal')
+
         # Configure grid weights
         main_frame.columnconfigure(0, weight=1)
         self.root.columnconfigure(0, weight=1)
@@ -93,16 +121,20 @@ class InstaDownloaderApp:
     
     def clear_urls(self):
         self.url_text.delete(1.0, tk.END)
+        self.url_text.insert(1.0, self._placeholder)
+        self.url_text.configure(foreground='#6b6f76')
     
     def log_message(self, message):
+        # Thread-safe UI update
         timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.log_text.see(tk.END)
-        self.root.update_idletasks()
+        def _append():
+            self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.log_text.see(tk.END)
+        self.root.after(0, _append)
     
     def start_download(self):
         urls_text = self.url_text.get(1.0, tk.END).strip()
-        if not urls_text:
+        if not urls_text or urls_text == self._placeholder:
             messagebox.showwarning("Warning", "Please enter at least one URL")
             return
         
@@ -131,15 +163,18 @@ class InstaDownloaderApp:
         except Exception as e:
             messagebox.showerror("Error", f"Cannot create download folder: {e}")
             return
-        
-        # Start download in a separate thread
+
+        # Start download in a separate thread with determinate progress
         self.is_downloading = True
         self.download_btn.config(state='disabled')
         self.stop_btn.config(state='normal')
-        self.progress_bar.start()
+        self._progress_total = len(urls)
+        self._progress_current = 0
+        self.progress_bar['maximum'] = max(1, self._progress_total)
+        self.progress_bar['value'] = 0
         self.progress_var.set(f"Starting download of {len(urls)} reel(s)...")
         self.log_text.delete(1.0, tk.END)
-        
+
         self.download_thread = threading.Thread(target=self.download_reels, args=(urls,))
         self.download_thread.daemon = True
         self.download_thread.start()
@@ -210,6 +245,7 @@ class InstaDownloaderApp:
                         if self.is_downloading:
                             successful_downloads += 1
                             self.log_message(f"✓ Successfully downloaded video: {video_filename}")
+                            self._increment_progress()
                         else:
                             # Remove incomplete file if download was stopped
                             if os.path.exists(video_path):
@@ -218,10 +254,12 @@ class InstaDownloaderApp:
                     else:
                         self.log_message(f"⚠ URL is not a video reel: {url}")
                         failed_downloads += 1
+                        self._increment_progress()
                     
                 except Exception as e:
                     failed_downloads += 1
                     self.log_message(f"✗ Failed to download {url}: {str(e)}")
+                    self._increment_progress()
             
             # Final summary
             if self.is_downloading:
@@ -243,7 +281,11 @@ class InstaDownloaderApp:
             self.is_downloading = False
             self.download_btn.config(state='normal')
             self.stop_btn.config(state='disabled')
-            self.progress_bar.stop()
+            # Ensure determinate progress bar is complete
+            try:
+                self.progress_bar['value'] = self._progress_total
+            except Exception:
+                pass
             
             if not hasattr(self, 'progress_var') or 'Error' not in self.progress_var.get():
                 if successful_downloads > 0:
@@ -251,6 +293,57 @@ class InstaDownloaderApp:
                                       f"Download completed!\n"
                                       f"Successful: {successful_downloads}\n"
                                       f"Failed: {failed_downloads}")
+
+    # --- UI helpers ---
+    def _increment_progress(self):
+        # Called from download thread; schedule UI update
+        def _step():
+            self._progress_current += 1
+            try:
+                self.progress_bar['value'] = self._progress_current
+                self.progress_var.set(f"{self._progress_current}/{self._progress_total} completed")
+            except Exception:
+                pass
+        self.root.after(0, _step)
+
+    def _clear_placeholder(self, event=None):
+        content = self.url_text.get(1.0, tk.END).strip()
+        if content == self._placeholder:
+            self.url_text.delete(1.0, tk.END)
+            self.url_text.configure(foreground='black')
+
+    def _restore_placeholder(self, event=None):
+        content = self.url_text.get(1.0, tk.END).strip()
+        if not content:
+            self.url_text.insert(1.0, self._placeholder)
+            self.url_text.configure(foreground='#6b6f76')
+
+    def _add_tooltip(self, widget, text):
+        # Simple tooltip implementation
+        class Tooltip:
+            def __init__(self, w, t):
+                self.w = w
+                self.t = t
+                self.tipwin = None
+                w.bind('<Enter>', self.show)
+                w.bind('<Leave>', self.hide)
+            def show(self, e=None):
+                if self.tipwin or not self.t:
+                    return
+                x = e.x_root + 12
+                y = e.y_root + 12
+                self.tipwin = tw = tk.Toplevel(self.w)
+                tw.wm_overrideredirect(True)
+                tw.wm_geometry(f"+{x}+{y}")
+                label = tk.Label(tw, text=self.t, justify=tk.LEFT,
+                                 background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                                 font=("tahoma", "8", "normal"))
+                label.pack(ipadx=4)
+            def hide(self, e=None):
+                if self.tipwin:
+                    self.tipwin.destroy()
+                    self.tipwin = None
+        Tooltip(widget, text)
 
 def main():
     root = tk.Tk()
